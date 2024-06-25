@@ -28,16 +28,17 @@ export function TranscriptionTile({
   );
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
 
-  useEffect(() => {
-    const participantTranscriptions = participants.map((participant) => {
-      const publication = participant.audioTracks.find((track) => track.source === Track.Source.Microphone);
-      return useTrackTranscription({
-        publication,
-        source: Track.Source.Microphone,
-        participant,
-      });
+  // Get transcriptions for all participants
+  const participantTranscriptions = participants.map((participant) => {
+    const publication = participant.audioTracks.find((track) => track.source === Track.Source.Microphone);
+    return useTrackTranscription({
+      publication,
+      source: Track.Source.Microphone,
+      participant,
     });
+  });
 
+  useEffect(() => {
     const allMessages: ChatMessageType[] = [];
     const newTranscripts = new Map(transcripts);
 
@@ -73,9 +74,11 @@ export function TranscriptionTile({
     setMessages(allMessages);
     setTranscripts(newTranscripts);
   }, [
+    transcripts,
     chatMessages,
     localParticipant.localParticipant,
     participants,
+    participantTranscriptions,
   ]);
 
   return (
