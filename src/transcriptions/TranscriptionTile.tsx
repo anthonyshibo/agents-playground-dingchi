@@ -3,7 +3,6 @@ import {
   TrackReferenceOrPlaceholder,
   useChat,
   useLocalParticipant,
-  useParticipants,
   useTrackTranscription,
 } from "@livekit/components-react";
 import {
@@ -28,7 +27,6 @@ export function TranscriptionTile({
     source: Track.Source.Microphone,
     participant: localParticipant.localParticipant,
   });
-  const participants = useParticipants();
 
   const [transcripts, setTranscripts] = useState<Map<string, ChatMessageType>>(
     new Map()
@@ -38,55 +36,27 @@ export function TranscriptionTile({
 
   // store transcripts
   useEffect(() => {
-    const newTranscripts = new Map(transcripts);
-
     agentMessages.segments.forEach((s) =>
-      newTranscripts.set(
+      transcripts.set(
         s.id,
         segmentToChatMessage(
           s,
-          newTranscripts.get(s.id),
+          transcripts.get(s.id),
           agentAudioTrack.participant
         )
       )
     );
     localMessages.segments.forEach((s) =>
-      newTranscripts.set(
+      transcripts.set(
         s.id,
         segmentToChatMessage(
           s,
-          newTranscripts.get(s.id),
+          transcripts.get(s.id),
           localParticipant.localParticipant
         )
       )
     );
 
-    participants.forEach((participant) => {
-      const participantMessages = useTrackTranscription({
-        publication: participant.audioTracks.find(
-          (track) => track.source === Track.Source.Microphone
-        ),
-        source: Track.Source.Microphone,
-        participant,
-      });
-      participantMessages.segments.forEach((s) =>
-        newTranscripts.set(
-          s.id,
-          segmentToChatMessage(s, newTranscripts.get(s.id), participant)
-        )
-      );
-    });
-
-    setTranscripts(newTranscripts);
-  }, [
-    agentMessages.segments,
-    localMessages.segments,
-    participants,
-    agentAudioTrack.participant,
-    localParticipant.localParticipant,
-  ]);
-
-  useEffect(() => {
     const allMessages = Array.from(transcripts.values());
     for (const msg of chatMessages) {
       const isAgent =
@@ -112,7 +82,14 @@ export function TranscriptionTile({
     }
     allMessages.sort((a, b) => a.timestamp - b.timestamp);
     setMessages(allMessages);
-  }, [transcripts, chatMessages, agentAudioTrack.participant, localParticipant.localParticipant]);
+  }, [
+    transcripts,
+    chatMessages,
+    localParticipant.localParticipant,
+    agentAudioTrack.participant,
+    agentMessages.segments,
+    localMessages.segments,
+  ]);
 
   return (
     <ChatTile messages={messages} accentColor={accentColor} onSend={sendChat} />
@@ -126,7 +103,7 @@ function segmentToChatMessage(
 ): ChatMessageType {
   const msg: ChatMessageType = {
     message: s.final ? s.text : `${s.text} ...`,
-    name: participant instanceof LocalParticipant ? "You" : participant.name,
+    name: participant instanceof LocalParticipant ? "You" : "Agent",
     isSelf: participant instanceof LocalParticipant,
     timestamp: existingMessage?.timestamp ?? Date.now(),
   };
