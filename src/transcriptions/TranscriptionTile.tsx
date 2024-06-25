@@ -3,7 +3,6 @@ import {
   TrackReferenceOrPlaceholder,
   useChat,
   useLocalParticipant,
-  useParticipants,
   useTrackTranscription,
 } from "@livekit/components-react";
 import {
@@ -15,72 +14,81 @@ import {
 import { useEffect, useState } from "react";
 
 export function TranscriptionTile({
+  agentAudioTrack,
   accentColor,
 }: {
+  agentAudioTrack: TrackReferenceOrPlaceholder;
   accentColor: string;
 }) {
+  const agentMessages = useTrackTranscription(agentAudioTrack);
   const localParticipant = useLocalParticipant();
-  const participants = useParticipants();
-  const { chatMessages, send: sendChat } = useChat();
+  const localMessages = useTrackTranscription({
+    publication: localParticipant.microphoneTrack,
+    source: Track.Source.Microphone,
+    participant: localParticipant.localParticipant,
+  });
 
   const [transcripts, setTranscripts] = useState<Map<string, ChatMessageType>>(
     new Map()
   );
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
+  const { chatMessages, send: sendChat } = useChat();
 
-  // Get transcriptions for all participants
-  const participantTranscriptions = participants.map((participant) => {
-    const publication = participant.audioTracks.find((track) => track.source === Track.Source.Microphone);
-    return publication ? useTrackTranscription({
-      publication,
-      source: Track.Source.Microphone,
-      participant,
-    }) : null;
-  });
-
+  // store transcripts
   useEffect(() => {
-    const newTranscripts = new Map(transcripts);
-    const allMessages: ChatMessageType[] = [];
+    agentMessages.segments.forEach((s) =>
+      transcripts.set(
+        s.id,
+        segmentToChatMessage(
+          s,
+          transcripts.get(s.id),
+          agentAudioTrack.participant
+        )
+      )
+    );
+    localMessages.segments.forEach((s) =>
+      transcripts.set(
+        s.id,
+        segmentToChatMessage(
+          s,
+          transcripts.get(s.id),
+          localParticipant.localParticipant
+        )
+      )
+    );
 
-    participantTranscriptions.forEach((transcription, index) => {
-      const participant = participants[index];
-      if (transcription) {
-        transcription.segments.forEach((s) => {
-          newTranscripts.set(
-            s.id,
-            segmentToChatMessage(
-              s,
-              newTranscripts.get(s.id),
-              participant
-            )
-          );
-        });
-      }
-    });
-
-    allMessages.push(...Array.from(newTranscripts.values()));
-
+    const allMessages = Array.from(transcripts.values());
     for (const msg of chatMessages) {
-      const participant = participants.find((p) => p.identity === msg.from?.identity);
-      if (participant) {
-        allMessages.push({
-          name: participant.name || "Unknown",
-          message: msg.message,
-          timestamp: msg.timestamp,
-          isSelf: msg.from?.identity === localParticipant.localParticipant.identity,
-        });
+      const isAgent =
+        msg.from?.identity === agentAudioTrack.participant?.identity;
+      const isSelf =
+        msg.from?.identity === localParticipant.localParticipant.identity;
+      let name = msg.from?.name;
+      if (!name) {
+        if (isAgent) {
+          name = "Agent";
+        } else if (isSelf) {
+          name = "You";
+        } else {
+          name = "Unknown";
+        }
       }
+      allMessages.push({
+        name,
+        message: msg.message,
+        timestamp: msg.timestamp,
+        isSelf: isSelf,
+      });
     }
-
     allMessages.sort((a, b) => a.timestamp - b.timestamp);
     setMessages(allMessages);
-    setTranscripts(newTranscripts);
   }, [
     transcripts,
     chatMessages,
     localParticipant.localParticipant,
-    participants,
-    participantTranscriptions,
+    agentAudioTrack.participant,
+    agentMessages.segments,
+    localMessages.segments,
   ]);
 
   return (
@@ -95,7 +103,7 @@ function segmentToChatMessage(
 ): ChatMessageType {
   const msg: ChatMessageType = {
     message: s.final ? s.text : `${s.text} ...`,
-    name: participant instanceof LocalParticipant ? "You" : participant.name || "Unknown",
+    name: participant instanceof LocalParticipant ? "You" : "Agent",
     isSelf: participant instanceof LocalParticipant,
     timestamp: existingMessage?.timestamp ?? Date.now(),
   };
