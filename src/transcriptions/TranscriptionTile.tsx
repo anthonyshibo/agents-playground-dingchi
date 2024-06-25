@@ -3,6 +3,7 @@ import {
   TrackReferenceOrPlaceholder,
   useChat,
   useLocalParticipant,
+  useParticipants,
   useTrackTranscription,
 } from "@livekit/components-react";
 import {
@@ -27,6 +28,7 @@ export function TranscriptionTile({
     source: Track.Source.Microphone,
     participant: localParticipant.localParticipant,
   });
+  const participants = useParticipants();
 
   const [transcripts, setTranscripts] = useState<Map<string, ChatMessageType>>(
     new Map()
@@ -56,6 +58,22 @@ export function TranscriptionTile({
         )
       )
     );
+
+    participants.forEach((participant) => {
+      const participantMessages = useTrackTranscription({
+        publication: participant.audioTracks.find(
+          (track) => track.source === Track.Source.Microphone
+        ),
+        source: Track.Source.Microphone,
+        participant,
+      });
+      participantMessages.segments.forEach((s) =>
+        transcripts.set(
+          s.id,
+          segmentToChatMessage(s, transcripts.get(s.id), participant)
+        )
+      );
+    });
 
     const allMessages = Array.from(transcripts.values());
     for (const msg of chatMessages) {
@@ -89,6 +107,7 @@ export function TranscriptionTile({
     agentAudioTrack.participant,
     agentMessages.segments,
     localMessages.segments,
+    participants,
   ]);
 
   return (
@@ -103,7 +122,7 @@ function segmentToChatMessage(
 ): ChatMessageType {
   const msg: ChatMessageType = {
     message: s.final ? s.text : `${s.text} ...`,
-    name: participant instanceof LocalParticipant ? "You" : "Agent",
+    name: participant instanceof LocalParticipant ? "You" : participant.name,
     isSelf: participant instanceof LocalParticipant,
     timestamp: existingMessage?.timestamp ?? Date.now(),
   };
