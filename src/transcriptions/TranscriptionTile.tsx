@@ -38,22 +38,24 @@ export function TranscriptionTile({
 
   // store transcripts
   useEffect(() => {
+    const newTranscripts = new Map(transcripts);
+
     agentMessages.segments.forEach((s) =>
-      transcripts.set(
+      newTranscripts.set(
         s.id,
         segmentToChatMessage(
           s,
-          transcripts.get(s.id),
+          newTranscripts.get(s.id),
           agentAudioTrack.participant
         )
       )
     );
     localMessages.segments.forEach((s) =>
-      transcripts.set(
+      newTranscripts.set(
         s.id,
         segmentToChatMessage(
           s,
-          transcripts.get(s.id),
+          newTranscripts.get(s.id),
           localParticipant.localParticipant
         )
       )
@@ -68,13 +70,23 @@ export function TranscriptionTile({
         participant,
       });
       participantMessages.segments.forEach((s) =>
-        transcripts.set(
+        newTranscripts.set(
           s.id,
-          segmentToChatMessage(s, transcripts.get(s.id), participant)
+          segmentToChatMessage(s, newTranscripts.get(s.id), participant)
         )
       );
     });
 
+    setTranscripts(newTranscripts);
+  }, [
+    agentMessages.segments,
+    localMessages.segments,
+    participants,
+    agentAudioTrack.participant,
+    localParticipant.localParticipant,
+  ]);
+
+  useEffect(() => {
     const allMessages = Array.from(transcripts.values());
     for (const msg of chatMessages) {
       const isAgent =
@@ -100,15 +112,7 @@ export function TranscriptionTile({
     }
     allMessages.sort((a, b) => a.timestamp - b.timestamp);
     setMessages(allMessages);
-  }, [
-    transcripts,
-    chatMessages,
-    localParticipant.localParticipant,
-    agentAudioTrack.participant,
-    agentMessages.segments,
-    localMessages.segments,
-    participants,
-  ]);
+  }, [transcripts, chatMessages, agentAudioTrack.participant, localParticipant.localParticipant]);
 
   return (
     <ChatTile messages={messages} accentColor={accentColor} onSend={sendChat} />
