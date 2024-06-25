@@ -3,7 +3,6 @@ import {
   TrackReferenceOrPlaceholder,
   useChat,
   useLocalParticipant,
-  useParticipants,
   useTrackTranscription,
 } from "@livekit/components-react";
 import {
@@ -15,58 +14,55 @@ import {
 import { useEffect, useState } from "react";
 
 export function TranscriptionTile({
+  agentAudioTrack,
   accentColor,
 }: {
+  agentAudioTrack: TrackReferenceOrPlaceholder;
   accentColor: string;
 }) {
-  const participants = useParticipants();
+  const agentMessages = useTrackTranscription(agentAudioTrack);
   const localParticipant = useLocalParticipant();
-  const [lastParticipant, setLastParticipant] = useState<Participant | null>(null);
+  const localMessages = useTrackTranscription({
+    publication: localParticipant.microphoneTrack,
+    source: Track.Source.Microphone,
+    participant: localParticipant.localParticipant,
+  });
+
   const [transcripts, setTranscripts] = useState<Map<string, ChatMessageType>>(
     new Map()
   );
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const { chatMessages, send: sendChat } = useChat();
 
+  // store transcripts
   useEffect(() => {
-    if (participants.length > 0) {
-      setLastParticipant(participants[participants.length - 1]);
-    }
-  }, [participants]);
-
-  useEffect(() => {
-    const allMessages: ChatMessageType[] = [];
-
-    if (lastParticipant) {
-      const audioTrack = lastParticipant.audioTracks.find(
-        (track) => track.source === Track.Source.Microphone
-      );
-      if (audioTrack) {
-        const messages = useTrackTranscription({
-          publication: audioTrack,
-          source: Track.Source.Microphone,
-          participant: lastParticipant,
-        }).segments.map((s) =>
-          segmentToChatMessage(s, undefined, lastParticipant)
-        );
-        allMessages.push(...messages);
-      }
-    }
-
-    const localMessages = useTrackTranscription({
-      publication: localParticipant.microphoneTrack,
-      source: Track.Source.Microphone,
-      participant: localParticipant.localParticipant,
-    }).segments.map((s) =>
-      segmentToChatMessage(s, undefined, localParticipant.localParticipant)
+    agentMessages.segments.forEach((s) =>
+      transcripts.set(
+        s.id,
+        segmentToChatMessage(
+          s,
+          transcripts.get(s.id),
+          agentAudioTrack.participant
+        )
+      )
     );
-    allMessages.push(...localMessages);
+    localMessages.segments.forEach((s) =>
+      transcripts.set(
+        s.id,
+        segmentToChatMessage(
+          s,
+          transcripts.get(s.id),
+          localParticipant.localParticipant
+        )
+      )
+    );
 
+    const allMessages = Array.from(transcripts.values());
     for (const msg of chatMessages) {
-      const isAgent = participants.some(
-        (p) => p.identity === msg.from?.identity
-      );
-      const isSelf = msg.from?.identity === localParticipant.localParticipant.identity;
+      const isAgent =
+        msg.from?.identity === agentAudioTrack.participant?.identity;
+      const isSelf =
+        msg.from?.identity === localParticipant.localParticipant.identity;
       let name = msg.from?.name;
       if (!name) {
         if (isAgent) {
@@ -84,15 +80,15 @@ export function TranscriptionTile({
         isSelf: isSelf,
       });
     }
-
     allMessages.sort((a, b) => a.timestamp - b.timestamp);
     setMessages(allMessages);
   }, [
     transcripts,
     chatMessages,
     localParticipant.localParticipant,
-    participants,
-    lastParticipant,
+    agentAudioTrack.participant,
+    agentMessages.segments,
+    localMessages.segments,
   ]);
 
   return (
