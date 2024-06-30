@@ -129,7 +129,7 @@ export default function Playground({
         setTranscripts([
           ...transcripts,
           {
-            name: "You",
+            name: "User",
             message: decoded.text,
             timestamp: timestamp,
             isSelf: true,
