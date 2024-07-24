@@ -385,21 +385,48 @@ export default function Playground({
     messages,
   ]);
 
-  let mobileTabs: PlaygroundTab[] = [];
-  if (config.settings.outputs.video) {
+let mobileTabs: PlaygroundTab[] = [];
+
+if (config.settings.outputs.video) {
+  mobileTabs.push({
+    title: "Video",
+    content: (
+      <PlaygroundTile
+        className="w-full h-full grow"
+        childrenClassName="justify-center"
+      >
+        {videoTileContent}
+      </PlaygroundTile>
+    ),
+  });
+}
+
+if (config.settings.outputs.audio && config.settings.chat && !config.settings.outputs.video) {
+  if (agentAudioTrack) {
     mobileTabs.push({
-      title: "Video",
+      title: "Audio & Chat",
       content: (
         <PlaygroundTile
           className="w-full h-full grow"
           childrenClassName="justify-center"
         >
-          {videoTileContent}
+          <div className="flex flex-col h-full">
+            <div className="flex-1 mb-4 overflow-y-auto" style={{ flexBasis: '30%' }}>
+              {audioTileContent}
+            </div>
+            <div className="flex-1 overflow-y-auto" style={{ flexBasis: '70%' }}>
+              <TranscriptionTile
+                agentAudioTrack={agentAudioTrack}
+                accentColor={config.settings.theme_color}
+                onMessagesUpdate={(messages) => setMessages(messages)}
+              />
+            </div>
+          </div>
         </PlaygroundTile>
       ),
     });
   }
-
+} else {
   if (config.settings.outputs.audio) {
     mobileTabs.push({
       title: "Audio",
@@ -414,26 +441,38 @@ export default function Playground({
     });
   }
 
-  if (config.settings.chat) {
+  if (config.settings.chat && agentAudioTrack) {
     mobileTabs.push({
       title: "Chat",
-      content: chatTileContent,
+      content: (
+        <PlaygroundTile
+          className="w-full h-full grow"
+          childrenClassName="justify-center"
+        >
+          <TranscriptionTile
+            agentAudioTrack={agentAudioTrack}
+            accentColor={config.settings.theme_color}
+            onMessagesUpdate={(messages) => setMessages(messages)}
+          />
+        </PlaygroundTile>
+      ),
     });
   }
+}
 
-  mobileTabs.push({
-    title: "Settings",
-    content: (
-      <PlaygroundTile
-        padding={false}
-        backgroundColor="gray-950"
-        className="h-full w-full basis-1/4 items-start overflow-y-auto flex"
-        childrenClassName="h-full grow items-start"
-      >
-        {settingsTileContent}
-      </PlaygroundTile>
-    ),
-  });
+mobileTabs.push({
+  title: "Settings",
+  content: (
+    <PlaygroundTile
+      padding={false}
+      backgroundColor="gray-950"
+      className="h-full w-full basis-1/4 items-start overflow-y-auto flex"
+      childrenClassName="h-full grow items-start"
+    >
+      {settingsTileContent}
+    </PlaygroundTile>
+  ),
+});
 
   return (
     <>
