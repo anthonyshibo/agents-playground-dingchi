@@ -1,7 +1,7 @@
 "use client";
 
 import { LoadingSVG } from "@/components/button/LoadingSVG";
-import { ChatMessageType, ChatTile } from "@/components/chat/ChatTile";
+import { ChatMessageType } from "@/components/chat/ChatTile";
 import { ColorPicker } from "@/components/colorPicker/ColorPicker";
 import { AudioInputTile } from "@/components/config/AudioInputTile";
 import { ConfigurationPanelItem } from "@/components/config/ConfigurationPanelItem";
@@ -15,15 +15,14 @@ import {
 import { AgentMultibandAudioVisualizer } from "@/components/visualization/AgentMultibandAudioVisualizer";
 import { useConfig } from "@/hooks/useConfig";
 import { useMultibandTrackVolume } from "@/hooks/useTrackVolume";
-import { AgentState } from "@/lib/types";
+import { TranscriptionTile } from "@/transcriptions/TranscriptionTile";
 import {
+  TrackReferenceOrPlaceholder,
   VideoTrack,
-  useChat,
   useConnectionState,
   useDataChannel,
   useLocalParticipant,
   useRemoteParticipants,
-  useRoomContext,
   useRoomInfo,
   useTracks,
 } from "@livekit/components-react";
@@ -56,7 +55,6 @@ export default function Playground({
 }: PlaygroundProps) {
   const { config, setUserSettings } = useConfig();
   const { name } = useRoomInfo();
-  const [agentState, setAgentState] = useState<AgentState>("offline");
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [transcripts, setTranscripts] = useState<ChatMessageType[]>([]);
   const { localParticipant } = useLocalParticipant();
@@ -65,8 +63,8 @@ export default function Playground({
     updateOnlyOn: [RoomEvent.ParticipantMetadataChanged],
   });
   const agentParticipant = participants.find((p) => p.isAgent);
+  const isAgentConnected = agentParticipant !== undefined;
 
-  const { send: sendChat, chatMessages } = useChat();
   const roomState = useConnectionState();
   const tracks = useTracks();
 
@@ -77,11 +75,20 @@ export default function Playground({
     }
   }, [config, localParticipant, roomState]);
 
-  const agentAudioTrack = tracks.find(
+  let agentAudioTrack: TrackReferenceOrPlaceholder | undefined;
+  const aat = tracks.find(
     (trackRef) =>
       trackRef.publication.kind === Track.Kind.Audio &&
       trackRef.participant.isAgent
   );
+  if (aat) {
+    agentAudioTrack = aat;
+  } else if (agentParticipant) {
+    agentAudioTrack = {
+      participant: agentParticipant,
+      source: Track.Source.Microphone,
+    };
+  }
 
   const agentVideoTrack = tracks.find(
     (trackRef) =>
@@ -90,7 +97,7 @@ export default function Playground({
   );
 
   const subscribedVolumes = useMultibandTrackVolume(
-    agentAudioTrack?.publication.track,
+    agentAudioTrack?.publication?.track,
     5
   );
 
@@ -108,24 +115,6 @@ export default function Playground({
     localMicTrack?.publication.track,
     20
   );
-
-  useEffect(() => {
-    if (!agentParticipant) {
-      setAgentState("offline");
-      return;
-    }
-    let agentMd: any = {};
-    if (agentParticipant.metadata) {
-      agentMd = JSON.parse(agentParticipant.metadata);
-    }
-    if (agentMd.agent_state) {
-      setAgentState(agentMd.agent_state);
-    } else {
-      setAgentState("starting");
-    }
-  }, [agentParticipant, agentParticipant?.metadata]);
-
-  const isAgentConnected = agentState !== "offline";
 
   const onDataReceived = useCallback(
     (msg: any) => {
@@ -150,33 +139,6 @@ export default function Playground({
     },
     [transcripts]
   );
-
-  // combine transcripts and chat together
-  useEffect(() => {
-    const allMessages = [...transcripts];
-    for (const msg of chatMessages) {
-      const isAgent = msg.from?.identity === agentParticipant?.identity;
-      const isSelf = msg.from?.identity === localParticipant?.identity;
-      let name = msg.from?.name;
-      if (!name) {
-        if (isAgent) {
-          name = "Agent";
-        } else if (isSelf) {
-          name = "You";
-        } else {
-          name = "Unknown";
-        }
-      }
-      allMessages.push({
-        name,
-        message: msg.message,
-        timestamp: msg?.timestamp,
-        isSelf: isSelf,
-      });
-    }
-    allMessages.sort((a, b) => a.timestamp - b.timestamp);
-    setMessages(allMessages);
-  }, [transcripts, chatMessages, localParticipant, agentParticipant]);
 
   useDataChannel(onDataReceived);
 
@@ -233,10 +195,11 @@ export default function Playground({
       </div>
     );
 
+    // TODO: keep it in the speaking state until we come up with a better protocol for agent states
     const visualizerContent = (
       <div className="flex items-center justify-center w-full">
         <AgentMultibandAudioVisualizer
-          state={agentState}
+          state="speaking"
           barWidth={30}
           minBarHeight={30}
           maxBarHeight={150}
@@ -260,21 +223,23 @@ export default function Playground({
     return visualizerContent;
   }, [
     agentAudioTrack,
-    agentState,
     config.settings.theme_color,
     subscribedVolumes,
     roomState,
   ]);
 
   const chatTileContent = useMemo(() => {
-    return (
-      <ChatTile
-        messages={messages}
-        accentColor={config.settings.theme_color}
-        onSend={sendChat}
-      />
-    );
-  }, [config.settings.theme_color, messages, sendChat]);
+    if (agentAudioTrack) {
+      return (
+        <TranscriptionTile
+          agentAudioTrack={agentAudioTrack}
+          accentColor={config.settings.theme_color}
+          onMessagesUpdate={(messages) => setMessages(messages)} // Pass the callback to update messages
+        />
+      );
+    }
+    return <></>;
+  }, [config.settings.theme_color, agentAudioTrack]);
 
   const settingsTileContent = useMemo(() => {
     return (
@@ -308,7 +273,7 @@ export default function Playground({
                 roomState === ConnectionState.Connecting ? (
                   <LoadingSVG diameter={16} strokeWidth={2} />
                 ) : (
-                  roomState
+                  roomState.toUpperCase()
                 )
               }
               valueColor={
@@ -321,33 +286,15 @@ export default function Playground({
               name="Agent connected"
               value={
                 isAgentConnected ? (
-                  "true"
+                  "TRUE"
                 ) : roomState === ConnectionState.Connected ? (
                   <LoadingSVG diameter={12} strokeWidth={2} />
                 ) : (
-                  "false"
+                  "FALSE"
                 )
               }
               valueColor={
                 isAgentConnected
-                  ? `${config.settings.theme_color}-500`
-                  : "gray-500"
-              }
-            />
-            <NameValueRow
-              name="Agent status"
-              value={
-                agentState !== "offline" && agentState !== "speaking" ? (
-                  <div className="flex gap-2 items-center">
-                    <LoadingSVG diameter={12} strokeWidth={2} />
-                    {agentState}
-                  </div>
-                ) : (
-                  agentState
-                )
-              }
-              valueColor={
-                agentState === "speaking"
                   ? `${config.settings.theme_color}-500`
                   : "gray-500"
               }
@@ -395,6 +342,31 @@ export default function Playground({
             </ConfigurationPanelItem>
           </div>
         )}
+        <div className="w-full">
+          <ConfigurationPanelItem title="Actions">
+            <button
+              className="flex items-center px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700"
+              onClick={() => {
+                const json = JSON.stringify(messages, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'chat_messages.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }}
+            >
+              <span>导出聊天记录</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-cloud-download ml-4" viewBox="0 0 16 16">
+                <path d="M4.406 1.342A5.53 5.53 0 0 1 8 0c2.69 0 4.923 2 5.166 4.579C14.758 4.804 16 6.137 16 7.773 16 9.569 14.502 11 12.687 11H10a.5.5 0 0 1 0-1h2.688C13.979 10 15 8.988 15 7.773c0-1.216-1.02-2.228-2.313-2.228h-.5v-.5C12.188 2.825 10.328 1 8 1a4.53 4.53 0 0 0-2.941 1.1c-.757.652-1.153 1.438-1.153 2.055v.448l-.445.049C2.064 4.805 1 5.952 1 7.318 1 8.785 2.23 10 3.781 10H6a.5.5 0 0 1 0 1H3.781C1.708 11 0 9.366 0 7.318c0-1.763 1.266-3.223 2.942-3.593.143-.863.698-1.723 1.464-2.383z"/>
+                <path d="M7.646 15.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 14.293V5.5a.5.5 0 0 0-1 0v8.793l-2.146-2.147a.5.5 0 0 0-.708.708l3 3z"/>
+              </svg>
+            </button>
+          </ConfigurationPanelItem>
+        </div>
       </div>
     );
   }, [
@@ -405,29 +377,56 @@ export default function Playground({
     name,
     roomState,
     isAgentConnected,
-    agentState,
     localVideoTrack,
     localMicTrack,
     localMultibandVolume,
     themeColors,
     setUserSettings,
+    messages,
   ]);
 
-  let mobileTabs: PlaygroundTab[] = [];
-  if (config.settings.outputs.video) {
+let mobileTabs: PlaygroundTab[] = [];
+
+if (config.settings.outputs.video) {
+  mobileTabs.push({
+    title: "Video",
+    content: (
+      <PlaygroundTile
+        className="w-full h-full grow"
+        childrenClassName="justify-center"
+      >
+        {videoTileContent}
+      </PlaygroundTile>
+    ),
+  });
+}
+
+if (config.settings.outputs.audio && config.settings.chat && !config.settings.outputs.video) {
+  if (agentAudioTrack) {
     mobileTabs.push({
-      title: "Video",
+      title: "Audio & Chat",
       content: (
         <PlaygroundTile
           className="w-full h-full grow"
           childrenClassName="justify-center"
         >
-          {videoTileContent}
+          <div className="flex flex-col h-full">
+            <div className="flex-1 mb-4 overflow-y-auto" style={{ flexBasis: '30%' }}>
+              {audioTileContent}
+            </div>
+            <div className="flex-1 overflow-y-auto" style={{ flexBasis: '70%' }}>
+              <TranscriptionTile
+                agentAudioTrack={agentAudioTrack}
+                accentColor={config.settings.theme_color}
+                onMessagesUpdate={(messages) => setMessages(messages)}
+              />
+            </div>
+          </div>
         </PlaygroundTile>
       ),
     });
   }
-
+} else {
   if (config.settings.outputs.audio) {
     mobileTabs.push({
       title: "Audio",
@@ -442,26 +441,38 @@ export default function Playground({
     });
   }
 
-  if (config.settings.chat) {
+  if (config.settings.chat && agentAudioTrack) {
     mobileTabs.push({
       title: "Chat",
-      content: chatTileContent,
+      content: (
+        <PlaygroundTile
+          className="w-full h-full grow"
+          childrenClassName="justify-center"
+        >
+          <TranscriptionTile
+            agentAudioTrack={agentAudioTrack}
+            accentColor={config.settings.theme_color}
+            onMessagesUpdate={(messages) => setMessages(messages)}
+          />
+        </PlaygroundTile>
+      ),
     });
   }
+}
 
-  mobileTabs.push({
-    title: "Settings",
-    content: (
-      <PlaygroundTile
-        padding={false}
-        backgroundColor="gray-950"
-        className="h-full w-full basis-1/4 items-start overflow-y-auto flex"
-        childrenClassName="h-full grow items-start"
-      >
-        {settingsTileContent}
-      </PlaygroundTile>
-    ),
-  });
+mobileTabs.push({
+  title: "Settings",
+  content: (
+    <PlaygroundTile
+      padding={false}
+      backgroundColor="gray-950"
+      className="h-full w-full basis-1/4 items-start overflow-y-auto flex"
+      childrenClassName="h-full grow items-start"
+    >
+      {settingsTileContent}
+    </PlaygroundTile>
+  ),
+});
 
   return (
     <>
