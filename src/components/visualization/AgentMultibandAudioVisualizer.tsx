@@ -1,8 +1,8 @@
+import { AgentState } from "@/lib/types";
 import { useEffect, useState } from "react";
 
-type VisualizerState = "listening" | "idle" | "speaking" | "thinking";
 type AgentMultibandAudioVisualizerProps = {
-  state: VisualizerState;
+  state: AgentState;
   barWidth: number;
   minBarHeight: number;
   maxBarHeight: number;
