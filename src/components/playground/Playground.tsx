@@ -217,7 +217,7 @@ export default function Playground({
     const visualizerContent = (
       <div className="flex items-center justify-center w-full">
         <AgentMultibandAudioVisualizer
-          state="{agentState}"
+          state={agentState}
           barWidth={30}
           minBarHeight={30}
           maxBarHeight={150}
