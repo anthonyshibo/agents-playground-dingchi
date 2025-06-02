@@ -3,8 +3,8 @@ import { PlaygroundDeviceSelector } from "@/components/playground/PlaygroundDevi
 import { TrackToggle } from "@livekit/components-react";
 import { Track } from "livekit-client";
 
-// 定义 ToggleSource 类型（根据 LiveKit 实际实现）
-type ToggleSource = 'camera' | 'microphone' | 'screen_share' | 'screen_share_audio';
+// 从组件库内部导入正确的 ToggleSource 类型
+type ToggleSource = import('@livekit/components-core').ToggleSource;
 
 type ConfigurationPanelItemProps = {
   title: string;
@@ -23,15 +23,16 @@ export const ConfigurationPanelItem: React.FC<ConfigurationPanelItemProps> = ({
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
 
-  // 将 Track.Source 转换为兼容字符串
+  // 类型安全的转换函数
   const getToggleSource = (source: Track.Source): ToggleSource => {
-    switch(source) {
-      case Track.Source.Camera: return 'camera';
-      case Track.Source.Microphone: return 'microphone';
-      case Track.Source.ScreenShare: return 'screen_share';
-      case Track.Source.ScreenShareAudio: return 'screen_share_audio';
-      default: return 'camera'; // 默认值
-    }
+    const sourceMap: Record<Track.Source, ToggleSource> = {
+      [Track.Source.Camera]: 'camera',
+      [Track.Source.Microphone]: 'microphone',
+      [Track.Source.ScreenShare]: 'screen_share',
+      [Track.Source.ScreenShareAudio]: 'screen_share_audio',
+      [Track.Source.Unknown]: 'camera' // 默认值
+    };
+    return sourceMap[source];
   };
 
   return (
@@ -43,7 +44,7 @@ export const ConfigurationPanelItem: React.FC<ConfigurationPanelItemProps> = ({
             <span className="flex flex-row gap-2">
               <TrackToggle
                 className="px-2 py-1 bg-gray-900 text-gray-300 border border-gray-800 rounded-sm hover:bg-gray-800"
-                source={getToggleSource(source)}  // 使用转换后的值
+                source={getToggleSource(source)}
               />
               {source === Track.Source.Camera && (
                 <PlaygroundDeviceSelector kind="videoinput" />
