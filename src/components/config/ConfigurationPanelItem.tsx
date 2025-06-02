@@ -1,6 +1,6 @@
 import { ReactNode, useState } from "react";
 import { PlaygroundDeviceSelector } from "@/components/playground/PlaygroundDeviceSelector";
-import { TrackToggle } from "@livekit/components-react";
+import { TrackToggle, type ToggleSource } from "@livekit/components-react"; // 显式导入类型
 import { Track } from "livekit-client";
 
 type ConfigurationPanelItemProps = {
@@ -19,7 +19,10 @@ export const ConfigurationPanelItem: React.FC<ConfigurationPanelItemProps> = ({
   defaultCollapsed = false,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
-
+// 类型转换函数
+  const toToggleSource = (source: Track.Source): ToggleSource => {
+  return Track.Source[source].toLowerCase() as ToggleSource;
+};
   return (
     <div className="w-full text-gray-300 py-4 border-b border-b-gray-800 relative">
       <div className="flex flex-row justify-between items-center px-4 text-xs uppercase tracking-wider">
@@ -29,7 +32,7 @@ export const ConfigurationPanelItem: React.FC<ConfigurationPanelItemProps> = ({
             <span className="flex flex-row gap-2">
               <TrackToggle
                 className="px-2 py-1 bg-gray-900 text-gray-300 border border-gray-800 rounded-sm hover:bg-gray-800"
-                source={source as unknown as ToggleSource}  // 关键修复：双重类型断言
+                source={toToggleSource(source)}  // 替换原来的
               />
               {source === Track.Source.Camera && (
                 <PlaygroundDeviceSelector kind="videoinput" />
