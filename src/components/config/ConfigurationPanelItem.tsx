@@ -1,7 +1,10 @@
 import { ReactNode, useState } from "react";
 import { PlaygroundDeviceSelector } from "@/components/playground/PlaygroundDeviceSelector";
-import { TrackToggle, type ToggleSource } from "@livekit/components-react"; // 显式导入类型
+import { TrackToggle } from "@livekit/components-react";
 import { Track } from "livekit-client";
+
+// 定义 ToggleSource 类型（根据 LiveKit 实际实现）
+type ToggleSource = 'camera' | 'microphone' | 'screen_share' | 'screen_share_audio';
 
 type ConfigurationPanelItemProps = {
   title: string;
@@ -19,10 +22,18 @@ export const ConfigurationPanelItem: React.FC<ConfigurationPanelItemProps> = ({
   defaultCollapsed = false,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
-// 类型转换函数
-  const toToggleSource = (source: Track.Source): ToggleSource => {
-  return Track.Source[source].toLowerCase() as ToggleSource;
-};
+
+  // 将 Track.Source 转换为兼容字符串
+  const getToggleSource = (source: Track.Source): ToggleSource => {
+    switch(source) {
+      case Track.Source.Camera: return 'camera';
+      case Track.Source.Microphone: return 'microphone';
+      case Track.Source.ScreenShare: return 'screen_share';
+      case Track.Source.ScreenShareAudio: return 'screen_share_audio';
+      default: return 'camera'; // 默认值
+    }
+  };
+
   return (
     <div className="w-full text-gray-300 py-4 border-b border-b-gray-800 relative">
       <div className="flex flex-row justify-between items-center px-4 text-xs uppercase tracking-wider">
@@ -32,7 +43,7 @@ export const ConfigurationPanelItem: React.FC<ConfigurationPanelItemProps> = ({
             <span className="flex flex-row gap-2">
               <TrackToggle
                 className="px-2 py-1 bg-gray-900 text-gray-300 border border-gray-800 rounded-sm hover:bg-gray-800"
-                source={toToggleSource(source)}  // 替换原来的
+                source={getToggleSource(source)}  // 使用转换后的值
               />
               {source === Track.Source.Camera && (
                 <PlaygroundDeviceSelector kind="videoinput" />
