@@ -2,13 +2,13 @@ import { ReactNode, useState } from "react";
 import { PlaygroundDeviceSelector } from "@/components/playground/PlaygroundDeviceSelector";
 import { TrackToggle } from "@livekit/components-react";
 import { Track } from "livekit-client";
-
+import type { ToggleSource } from "@livekit/components-core";
 type ConfigurationPanelItemProps = {
   title: string;
   children?: ReactNode;
-  source?: Track.Source;
   collapsible?: boolean;
   defaultCollapsed?: boolean;
+  source?: ToggleSource;
 };
 
 export const ConfigurationPanelItem: React.FC<ConfigurationPanelItemProps> = ({
